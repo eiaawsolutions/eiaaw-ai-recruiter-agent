@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\WebhookEndpoint;
 use App\Support\TenantContext;
+use App\Support\UrlGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class WebhookEndpointController extends Controller
 {
@@ -27,6 +29,14 @@ class WebhookEndpointController extends Controller
             'events.*' => 'string|max:80',
         ]);
 
+        try {
+            UrlGuard::assertSafe($data['url']);
+        } catch (\InvalidArgumentException $e) {
+            throw ValidationException::withMessages([
+                'url' => ['Webhook URL must be a public https endpoint on the default port.'],
+            ]);
+        }
+
         $secret = 'whs_' . Str::random(48);
         $endpoint = WebhookEndpoint::create([
             'tenant_id' => TenantContext::require()->id,
@@ -42,9 +52,9 @@ class WebhookEndpointController extends Controller
         ], 201);
     }
 
-    public function destroy(int $id): JsonResponse
+    public function destroy(string $publicId): JsonResponse
     {
-        $row = WebhookEndpoint::query()->where('id', $id)->firstOrFail();
+        $row = WebhookEndpoint::query()->where('public_id', $publicId)->firstOrFail();
         $row->delete();
         return response()->json(['data' => ['deleted' => true]]);
     }
@@ -52,7 +62,7 @@ class WebhookEndpointController extends Controller
     private function present(WebhookEndpoint $w): array
     {
         return [
-            'id'                   => $w->id,
+            'id'                   => $w->public_id,
             'url'                  => $w->url,
             'events'               => $w->events,
             'is_active'            => $w->is_active,

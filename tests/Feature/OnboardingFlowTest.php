@@ -33,7 +33,7 @@ it('queues the brand-DNA extraction job when a brand_url is provided', function 
         'contact_email'  => 'owner@beta.test',
         'admin_name'     => 'Owner Two',
         'admin_password' => 'super-secret-pw',
-        'brand_url'      => 'https://beta.example/about',
+        'brand_url'      => 'https://example.com/about',
     ])->assertRedirect();
 
     \Illuminate\Support\Facades\Bus::assertDispatched(\App\Jobs\ExtractBrandDnaJob::class);

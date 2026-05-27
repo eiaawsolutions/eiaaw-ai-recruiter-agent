@@ -41,11 +41,11 @@ it('extracts a brand profile from HTML and writes it to the tenant', function ()
     TenantContext::bind($tenant);
 
     $extractor = new BrandDnaExtractor($anthropic, $siteClient);
-    $profile = $extractor->extract($tenant, 'https://beta.example');
+    $profile = $extractor->extract($tenant, 'https://example.com');
 
     $tenant->refresh();
     expect($profile['voice_short'])->toBe('calm, technical, no hype')
         ->and($tenant->brand_voice)->toBe('calm, technical, no hype')
-        ->and($tenant->brand_profile['source_url'])->toBe('https://beta.example')
+        ->and($tenant->brand_profile['source_url'])->toBe('https://example.com')
         ->and($tenant->brand_profile['pillars'])->toContain('reliability');
 });

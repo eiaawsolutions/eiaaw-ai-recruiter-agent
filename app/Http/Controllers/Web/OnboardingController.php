@@ -9,6 +9,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Models\WebhookEndpoint;
 use App\Support\TenantContext;
+use App\Support\UrlGuard;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -41,6 +42,10 @@ class OnboardingController extends Controller
             'brand_url'      => 'nullable|url|max:300',
             'brand_voice'    => 'nullable|string|max:200',
         ]);
+
+        if (! empty($data['brand_url']) && ! UrlGuard::isSafe($data['brand_url'])) {
+            return back()->withErrors(['brand_url' => 'Brand URL must be a public https endpoint.'])->withInput();
+        }
 
         if (Tenant::query()->where('slug', Str::slug($data['tenant_name']))->exists()) {
             return back()->withErrors(['tenant_name' => 'A tenant with that name already exists.'])->withInput();
@@ -86,9 +91,10 @@ class OnboardingController extends Controller
     public function rerunBrand(Request $request): RedirectResponse
     {
         $tenant = TenantContext::require();
-        $url    = (string) $request->input('brand_url', '');
-        if ($url === '') {
-            return back()->withErrors(['brand_url' => 'Brand URL required.']);
+        $request->validate(['brand_url' => 'required|url|max:300']);
+        $url = (string) $request->input('brand_url');
+        if (! UrlGuard::isSafe($url)) {
+            return back()->withErrors(['brand_url' => 'Brand URL must be a public https endpoint.']);
         }
         ExtractBrandDnaJob::dispatch($tenant->id, $url);
         return back()->with('status', 'Brand extraction queued.');
@@ -122,6 +128,9 @@ class OnboardingController extends Controller
             'events'   => 'required|array|min:1',
             'events.*' => 'string|max:80',
         ]);
+        if (! UrlGuard::isSafe($data['url'])) {
+            return back()->withErrors(['url' => 'Webhook URL must be a public https endpoint.']);
+        }
         $secret = 'whs_' . Str::random(48);
         WebhookEndpoint::create([
             'tenant_id' => TenantContext::require()->id,

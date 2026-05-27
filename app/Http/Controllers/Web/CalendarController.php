@@ -64,9 +64,9 @@ class CalendarController extends Controller
         return redirect()->route('calendar.index')->with('status', ucfirst($provider) . ' calendar connected.');
     }
 
-    public function disconnect(int $id): RedirectResponse
+    public function disconnect(string $publicId): RedirectResponse
     {
-        $c = CalendarConnection::query()->where('id', $id)->firstOrFail();
+        $c = CalendarConnection::query()->where('public_id', $publicId)->firstOrFail();
         $c->update(['is_active' => false]);
         return back()->with('status', 'Calendar disconnected.');
     }

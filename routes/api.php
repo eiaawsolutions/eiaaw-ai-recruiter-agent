@@ -7,14 +7,9 @@ use App\Http\Controllers\Api\OutreachController;
 use App\Http\Controllers\Api\SpaAuthController;
 use App\Http\Controllers\Api\WebhookEndpointController;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\RateLimiter;
 
-RateLimiter::for('api', function ($request) {
-    $limit = (int) config('services.recruiter.api_rate_limit_per_min', 120);
-    $key = optional($request->attributes->get('api_key'))->id
-        ?? $request->ip();
-    return [\Illuminate\Cache\RateLimiting\Limit::perMinute($limit)->by($key)];
-});
+// NOTE: the `api` rate limiter is registered in App\Providers\AppServiceProvider::boot()
+// so it survives `route:cache` in production. Don't move it back here.
 
 Route::middleware(['api.key', 'throttle:api'])->prefix('v1')->group(function () {
 
@@ -36,9 +31,9 @@ Route::middleware(['api.key', 'throttle:api'])->prefix('v1')->group(function () 
     Route::post('/outreach/{publicId}/approve',     [OutreachController::class, 'approve']);
     Route::post('/outreach/{publicId}/reject',      [OutreachController::class, 'reject']);
 
-    Route::get('/webhook-endpoints',                [WebhookEndpointController::class, 'index']);
-    Route::post('/webhook-endpoints',               [WebhookEndpointController::class, 'store']);
-    Route::delete('/webhook-endpoints/{id}',        [WebhookEndpointController::class, 'destroy']);
+    Route::get('/webhook-endpoints',                       [WebhookEndpointController::class, 'index']);
+    Route::post('/webhook-endpoints',                      [WebhookEndpointController::class, 'store']);
+    Route::delete('/webhook-endpoints/{publicId}',         [WebhookEndpointController::class, 'destroy']);
 
     Route::post('/handoff/workforce/{candidatePublicId}', [HandoffController::class, 'workforce']);
 });

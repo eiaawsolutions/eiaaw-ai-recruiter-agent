@@ -56,7 +56,7 @@ Route::middleware(['auth', 'tenant.scope'])->group(function () {
     Route::get('/calendars',                              [CalendarController::class, 'index'])->name('calendar.index');
     Route::get('/calendars/connect/{provider}',           [CalendarController::class, 'start'])->name('calendar.start');
     Route::get('/calendars/callback/{provider}',          [CalendarController::class, 'callback'])->name('calendar.callback');
-    Route::post('/calendars/{id}/disconnect',             [CalendarController::class, 'disconnect'])->name('calendar.disconnect');
+    Route::post('/calendars/{publicId}/disconnect',       [CalendarController::class, 'disconnect'])->name('calendar.disconnect');
     Route::post('/interviews/{publicId}/confirm',         [CalendarController::class, 'confirmSlot'])->name('interviews.confirm');
 });
 

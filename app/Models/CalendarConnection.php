@@ -5,16 +5,24 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class CalendarConnection extends Model
 {
     use HasFactory, BelongsToTenant;
 
     protected $fillable = [
-        'tenant_id', 'user_id', 'provider', 'account_email', 'calendar_id',
+        'public_id', 'tenant_id', 'user_id', 'provider', 'account_email', 'calendar_id',
         'access_token', 'refresh_token', 'access_token_expires_at',
         'scopes', 'timezone', 'is_active', 'last_synced_at',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (CalendarConnection $c) {
+            $c->public_id ??= (string) Str::uuid();
+        });
+    }
 
     protected $casts = [
         'scopes'                  => 'array',

@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\WebhookDelivery;
 use App\Support\TenantContext;
+use App\Support\UrlGuard;
 use GuzzleHttp\Client;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -36,8 +37,38 @@ class DeliverWebhookJob implements ShouldQueue
         $maxAttempts = (int) config('services.recruiter.webhook_retry_max', 8);
         $header      = (string) config('services.recruiter.webhook_signature_header', 'X-EIAAW-Signature');
 
+        // Re-validate the destination URL at delivery time — the row was checked
+        // at creation, but DNS/host can drift, and we never want the worker
+        // pivoting to a private address.
+        if (! UrlGuard::isSafe($endpoint->url)) {
+            $delivery->update([
+                'status'     => 'abandoned',
+                'last_error' => 'endpoint_url_unsafe',
+            ]);
+            $endpoint->forceFill([
+                'is_active'       => false,
+                'last_failure_at' => now(),
+            ])->saveQuietly();
+            TenantContext::clear();
+            return;
+        }
+
         try {
-            $http = new Client(['http_errors' => false, 'timeout' => 25]);
+            $http = new Client([
+                'http_errors' => false,
+                'timeout'     => 25,
+                'verify'      => true,
+                // Re-check every redirect target to defeat redirect-to-internal.
+                'allow_redirects' => [
+                    'max'         => 3,
+                    'strict'      => true,
+                    'referer'     => false,
+                    'protocols'   => ['https'],
+                    'on_redirect' => function ($req, $resp, $uri) {
+                        UrlGuard::assertSafe((string) $uri);
+                    },
+                ],
+            ]);
             $response = $http->post($endpoint->url, [
                 'headers' => [
                     'Content-Type' => 'application/json',
