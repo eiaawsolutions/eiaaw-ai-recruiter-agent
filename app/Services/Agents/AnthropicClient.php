@@ -100,11 +100,14 @@ class AnthropicClient
             ]);
             return json_decode((string) $resp->getBody(), true) ?? [];
         } catch (GuzzleException $e) {
+            // Don't log Guzzle's full error message — it can include request
+            // headers (incl. the `x-api-key` we just sent) or response bodies.
             Log::error('AnthropicClient: request failed', [
-                'model' => $model,
-                'error' => $e->getMessage(),
+                'model'       => $model,
+                'error_class' => $e::class,
+                'code'        => $e->getCode(),
             ]);
-            throw new RuntimeException('Anthropic request failed: ' . $e->getMessage(), 0, $e);
+            throw new RuntimeException('Anthropic request failed.', 0, $e);
         }
     }
 

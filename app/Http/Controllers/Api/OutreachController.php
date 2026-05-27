@@ -62,7 +62,9 @@ class OutreachController extends Controller
 
     public function reject(Request $request, string $publicId): JsonResponse
     {
-        $reason = (string) $request->input('reason', 'rejected_by_operator');
+        $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
         $msg = OutreachMessage::query()->where('public_id', $publicId)->firstOrFail();
         $msg->update(['status' => 'suppressed']);
         return response()->json(['data' => $this->present($msg)]);

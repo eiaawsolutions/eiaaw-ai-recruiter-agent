@@ -32,7 +32,17 @@ class SpaAuthController extends Controller
         ]);
 
         $user = User::query()->withoutGlobalScopes()->where('email', $creds['email'])->first();
-        if (! $user || ! Hash::check($creds['password'], $user->password) || ! $user->is_active) {
+
+        // Always run a Hash::check, even when the user doesn't exist, so the
+        // request timing does not leak account existence to attackers.
+        $dummyHash = '$2y$10$AbsoluteDummyHashAbsoluteDummyHashAbsoluteDummyHashAbso';
+        $passwordOk = Hash::check(
+            $creds['password'],
+            $user?->password ?: $dummyHash,
+        );
+
+        if (! $user || ! $passwordOk || ! $user->is_active) {
+            // Single generic error — never reveal "no such user" vs "wrong password".
             throw ValidationException::withMessages(['email' => ['Invalid credentials.']]);
         }
 

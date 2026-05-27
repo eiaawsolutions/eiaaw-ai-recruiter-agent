@@ -25,8 +25,13 @@ class ResendInboundController extends Controller
         $type    = (string) ($payload['type'] ?? '');
         $eventId = (string) ($payload['data']['email_id'] ?? $payload['data']['id'] ?? '');
 
-        $event = InboundWebhookEvent::updateOrCreate(
-            ['provider' => 'resend', 'event_id' => $eventId !== '' ? "{$type}:{$eventId}" : null],
+        // Idempotency: insert-only on the (provider, event_id) unique key.
+        // If a row already exists, we ack 200 but do NOT re-process and do NOT
+        // overwrite its payload — replay attempts with a recycled event_id can
+        // not flip signature_valid or mutate the originally-signed body.
+        $compositeId = $eventId !== '' ? "{$type}:{$eventId}" : null;
+        $event = InboundWebhookEvent::firstOrCreate(
+            ['provider' => 'resend', 'event_id' => $compositeId],
             [
                 'event_type'      => $type,
                 'payload'         => $payload,
@@ -34,6 +39,10 @@ class ResendInboundController extends Controller
                 'processed_at'    => now(),
             ]
         );
+
+        if (! $event->wasRecentlyCreated) {
+            return response()->json(['ok' => true, 'duplicate' => true]);
+        }
 
         if ($type === 'email.received') {
             // Inbound reply — hand to the reply parser job for matching +

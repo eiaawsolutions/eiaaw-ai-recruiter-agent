@@ -51,9 +51,12 @@ class CandidateController extends Controller
 
     public function draftOutreach(Request $request, string $publicId): JsonResponse
     {
+        $data = $request->validate([
+            'instructions' => 'nullable|string|max:2000',
+        ]);
         $candidate = Candidate::query()->where('public_id', $publicId)->firstOrFail();
-        $instructions = (string) $request->input('instructions', '');
-        RunDraftingJob::dispatch($candidate->tenant_id, $candidate->id, $instructions ?: null);
+        $instructions = (string) ($data['instructions'] ?? '');
+        RunDraftingJob::dispatch($candidate->tenant_id, $candidate->id, $instructions !== '' ? $instructions : null);
         return response()->json(['data' => ['queued' => true, 'candidate_id' => $candidate->public_id]], 202);
     }
 
@@ -66,7 +69,10 @@ class CandidateController extends Controller
 
     public function discard(Request $request, string $publicId): JsonResponse
     {
-        $reason    = (string) $request->input('reason', 'manual_discard');
+        $data = $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+        $reason    = trim((string) ($data['reason'] ?? 'manual_discard'));
         $candidate = Candidate::query()->where('public_id', $publicId)->firstOrFail();
         $candidate->update(['stage' => 'discarded', 'discard_reason' => $reason]);
         return response()->json(['data' => $this->present($candidate)]);

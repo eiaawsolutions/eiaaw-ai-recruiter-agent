@@ -47,9 +47,14 @@ class InfisicalResolver
             $this->memo[$handle] = $value;
             return $value;
         } catch (\Throwable $e) {
+            // Log only structural metadata — never the exception message, which
+            // may include partial response bodies or transient values.
             Log::error('InfisicalResolver: fetch failed', [
-                'handle' => $handle,
-                'error'  => $e->getMessage(),
+                'project'     => $parsed['project'],
+                'environment' => $parsed['environment'],
+                'path'        => $parsed['path'],
+                'name'        => $parsed['name'],
+                'error_class' => $e::class,
             ]);
             throw $e;
         }

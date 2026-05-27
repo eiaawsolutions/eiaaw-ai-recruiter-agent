@@ -5,6 +5,7 @@ namespace App\Services\Integrations;
 use App\Models\Candidate;
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
@@ -30,6 +31,13 @@ class WorkforceHandoff
             throw new RuntimeException('Workforce handoff is not configured.');
         }
 
+        // Replay protection — every request carries a fresh nonce and a unix
+        // timestamp. Both are inside the signed payload, so a captured request
+        // cannot be replayed once the Workforce side rejects stale timestamps
+        // (default 5-minute window) and seen nonces.
+        $nonce     = (string) Str::uuid();
+        $timestamp = (string) time();
+
         $payload = array_filter([
             'candidate_public_id' => $candidate->public_id,
             'name'                => $candidate->name,
@@ -38,16 +46,28 @@ class WorkforceHandoff
             'start_date'          => $extras['start_date'] ?? null,
             'comp'                => $extras['comp']       ?? null,
             'source_recruiter'    => true,
-        ]);
+            'nonce'               => $nonce,
+            'timestamp'           => $timestamp,
+        ], fn ($v) => $v !== null && $v !== '');
+
+        // Use sorted-key JSON so the receiving side can re-serialize and verify
+        // the signature deterministically.
+        ksort($payload);
         $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
         $sig  = 'sha256=' . hash_hmac('sha256', $body, $hmac);
 
-        $http = $this->http ?? new Client(['http_errors' => false, 'timeout' => 30]);
+        $http = $this->http ?? new Client([
+            'http_errors' => false,
+            'timeout'     => 30,
+            'verify'      => true,
+        ]);
         $resp = $http->post("{$baseUrl}/api/recruiter/handoff", [
             'headers' => [
-                'Authorization'    => 'Bearer ' . $apiKey,
-                'Content-Type'     => 'application/json',
-                'X-EIAAW-Signature' => $sig,
+                'Authorization'      => 'Bearer ' . $apiKey,
+                'Content-Type'       => 'application/json',
+                'X-EIAAW-Signature'  => $sig,
+                'X-EIAAW-Timestamp'  => $timestamp,
+                'X-EIAAW-Nonce'      => $nonce,
             ],
             'body' => $body,
         ]);

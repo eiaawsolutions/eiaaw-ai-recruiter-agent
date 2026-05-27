@@ -94,6 +94,11 @@ class ReplyParser
      */
     public function looksLikeAvailability(string $text): bool
     {
+        // Bound the input before regex / strtolower — defeats ReDoS-style
+        // pathological inputs from inbound email bodies. 16KB is far more than
+        // any real availability text needs.
+        $text = mb_substr($text, 0, 16_000);
+
         $needles = [
             'available', 'availability', 'free', 'schedule', 'calendar', 'call',
             'meet', 'chat', 'speak',
@@ -106,6 +111,6 @@ class ReplyParser
         foreach ($needles as $n) {
             if (str_contains($t, $n)) return true;
         }
-        return (bool) preg_match('/\b\d{1,2}([:.]\d{2})?\s*(am|pm|h|hrs)?\b/i', $text);
+        return (bool) preg_match('/\b\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm|h|hrs)?\b/i', $text);
     }
 }
