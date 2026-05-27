@@ -1,5 +1,11 @@
 *
 !.gitignore
 !app/
+!app/public/
 !framework/
+!framework/cache/
+!framework/cache/data/
+!framework/sessions/
+!framework/testing/
+!framework/views/
 !logs/

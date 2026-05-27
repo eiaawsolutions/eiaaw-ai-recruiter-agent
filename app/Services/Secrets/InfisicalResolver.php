@@ -3,7 +3,6 @@
 namespace App\Services\Secrets;
 
 use GuzzleHttp\Client;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
@@ -11,6 +10,15 @@ class InfisicalResolver
 {
     private ?string $accessToken = null;
     private int $accessTokenExpiresAt = 0;
+
+    /** In-memory memo for the lifetime of the process. Persistent caching
+     *  via Laravel's Cache facade is not safe here — the resolver runs
+     *  inside SecretsServiceProvider::register(), which fires before the
+     *  cache binding is registered (and also runs during `config:cache`
+     *  build-time where there is no cache store at all). Each PHP worker
+     *  resolves once on first request and reuses for the rest of its life.
+     *  @var array<string,string> */
+    private array $memo = [];
 
     /** @param array<string,mixed> $config */
     public function __construct(
@@ -24,26 +32,27 @@ class InfisicalResolver
             return $handle;
         }
 
+        if (isset($this->memo[$handle])) {
+            return $this->memo[$handle];
+        }
+
         $parsed = self::parseHandle($handle);
         if ($parsed === null) {
             Log::warning('InfisicalResolver: malformed handle', ['handle' => $handle]);
             return $handle;
         }
 
-        $ttl = (int) ($this->config['cache_ttl'] ?? 300);
-        $cacheKey = 'infisical:'.md5($handle);
-
-        return Cache::remember($cacheKey, $ttl, function () use ($parsed, $handle) {
-            try {
-                return $this->fetch($parsed['environment'], $parsed['path'], $parsed['name']);
-            } catch (\Throwable $e) {
-                Log::error('InfisicalResolver: fetch failed', [
-                    'handle' => $handle,
-                    'error'  => $e->getMessage(),
-                ]);
-                throw $e;
-            }
-        });
+        try {
+            $value = $this->fetch($parsed['environment'], $parsed['path'], $parsed['name']);
+            $this->memo[$handle] = $value;
+            return $value;
+        } catch (\Throwable $e) {
+            Log::error('InfisicalResolver: fetch failed', [
+                'handle' => $handle,
+                'error'  => $e->getMessage(),
+            ]);
+            throw $e;
+        }
     }
 
     /** @return array{project:string,environment:string,path:string,name:string}|null */
