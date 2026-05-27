@@ -1,0 +1,362 @@
+openapi: 3.1.0
+info:
+  title: EIAAW Recruiter API
+  version: 1.0.0
+  description: |
+    EIAAW Recruiter is a standalone autonomous recruiting agent that plugs
+    into any company stack via REST + HMAC-signed webhooks.
+
+    AUTHENTICATION
+    --------------
+    All `/api/v1/*` endpoints require a per-tenant API key.
+    Send it as `Authorization: Bearer rcr_xxx` (preferred) or `X-API-Key: rcr_xxx`.
+
+    GUARANTEES
+    ----------
+    - Every candidate row has >=1 verification source URL.
+    - Email and phone are never guessed; if not verified, they are returned as "".
+    - All outbound messages pass a human approval gate before send.
+    - Outbound webhooks are HMAC-SHA256 signed (`X-EIAAW-Signature: sha256=...`).
+
+    EVENTS (subscribe via `POST /api/v1/webhook-endpoints`)
+    -------------------------------------------------------
+    - `candidate.sourced`           — agent produced a verified candidate row
+    - `candidate.screened`          — screening completed; payload includes overall_score
+    - `outreach.drafted`            — draft ready (require_approval=false tenants)
+    - `outreach.pending_approval`   — draft awaiting human approval
+    - `outreach.sent`               — message dispatched via provider
+    - `outreach.replied`            — candidate reply ingested
+    - `interview.proposed`          — agent proposed slots
+    - `candidate.shortlisted`       — operator shortlisted
+    - `candidate.hired`             — operator marked hired (handoff trigger)
+
+servers:
+  - url: https://recruiter.eiaawsolutions.com
+    description: Production
+  - url: http://localhost:8000
+    description: Local dev
+
+security:
+  - BearerKey: []
+
+paths:
+  /api/v1/health:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        '200': { description: OK }
+
+  /api/v1/spa/login:
+    post:
+      summary: SPA cookie-session login
+      description: |
+        For SPA consoles. Call `GET /sanctum/csrf-cookie` first; this endpoint
+        then sets the session cookie used by every `/api/v1/spa/*` call.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:    { type: string, format: email }
+                password: { type: string }
+                remember: { type: boolean }
+      responses:
+        '200': { description: Logged in }
+        '422': { description: Invalid credentials }
+
+  /api/v1/spa/me:
+    get:
+      summary: Current SPA user + tenant
+      responses:
+        '200': { description: OK }
+        '401': { description: Unauthenticated }
+
+  /api/v1/spa/tokens:
+    post:
+      summary: Mint a Sanctum personal token (user-scoped)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:      { type: string }
+                abilities: { type: array, items: { type: string } }
+      responses:
+        '201': { description: Token created (plaintext returned once) }
+
+  /api/v1/spa/logout:
+    post:
+      summary: Clear SPA session
+      responses:
+        '200': { description: OK }
+
+  /api/v1/jobs:
+    get:
+      summary: List jobs
+      responses:
+        '200': { $ref: '#/components/responses/JobList' }
+    post:
+      summary: Create a job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/JobInput' }
+      responses:
+        '201': { $ref: '#/components/responses/Job' }
+
+  /api/v1/jobs/{publicId}:
+    parameters:
+      - $ref: '#/components/parameters/publicId'
+    get:
+      summary: Get a job
+      responses:
+        '200': { $ref: '#/components/responses/Job' }
+    delete:
+      summary: Close a job
+      responses:
+        '200': { $ref: '#/components/responses/Job' }
+
+  /api/v1/jobs/{publicId}/source:
+    parameters:
+      - $ref: '#/components/parameters/publicId'
+    post:
+      summary: Queue a sourcing run
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        '202': { description: Queued }
+
+  /api/v1/candidates:
+    get:
+      summary: List candidates
+      parameters:
+        - in: query
+          name: job_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: stage
+          schema: { type: string }
+        - in: query
+          name: confidence
+          schema: { type: string, enum: [High, Medium, Low] }
+      responses:
+        '200': { $ref: '#/components/responses/CandidateList' }
+
+  /api/v1/candidates/{publicId}:
+    parameters:
+      - $ref: '#/components/parameters/publicId'
+    get:
+      summary: Get a candidate (with screening, sources, outreach, interviews)
+      responses:
+        '200': { $ref: '#/components/responses/Candidate' }
+
+  /api/v1/candidates/{publicId}/screen:
+    parameters:
+      - $ref: '#/components/parameters/publicId'
+    post:
+      summary: Queue screening
+      responses:
+        '202': { description: Queued }
+
+  /api/v1/candidates/{publicId}/draft:
+    parameters:
+      - $ref: '#/components/parameters/publicId'
+    post:
+      summary: Queue outreach draft
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                instructions: { type: string }
+      responses:
+        '202': { description: Queued }
+
+  /api/v1/candidates/{publicId}/shortlist:
+    parameters:
+      - $ref: '#/components/parameters/publicId'
+    post:
+      summary: Shortlist a candidate
+      responses:
+        '200': { $ref: '#/components/responses/Candidate' }
+
+  /api/v1/candidates/{publicId}/discard:
+    parameters:
+      - $ref: '#/components/parameters/publicId'
+    post:
+      summary: Discard a candidate
+      responses:
+        '200': { $ref: '#/components/responses/Candidate' }
+
+  /api/v1/outreach/{publicId}/approve:
+    parameters:
+      - $ref: '#/components/parameters/publicId'
+    post:
+      summary: Approve outreach for send
+      responses:
+        '200': { description: Approved and queued }
+
+  /api/v1/webhook-endpoints:
+    get:
+      summary: List webhook endpoints
+      responses:
+        '200': { description: OK }
+    post:
+      summary: Register a webhook endpoint
+      description: |
+        Returns the signing secret ONCE in the response body. Store it.
+        Every outbound delivery to this URL carries
+        `X-EIAAW-Signature: sha256=<hex>` computed over the raw JSON body.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url:    { type: string, format: uri }
+                events:
+                  type: array
+                  items: { type: string }
+      responses:
+        '201': { description: Created }
+
+  /api/v1/handoff/workforce/{candidatePublicId}:
+    parameters:
+      - in: path
+        name: candidatePublicId
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      summary: Hand off a hired candidate to EIAAW Workforce onboarding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role_title: { type: string }
+                start_date: { type: string, format: date }
+                comp:       { type: object }
+      responses:
+        '200': { description: Handed off }
+        '409': { description: Candidate not in eligible stage }
+
+components:
+  securitySchemes:
+    BearerKey:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+
+  parameters:
+    publicId:
+      in: path
+      name: publicId
+      required: true
+      schema: { type: string, format: uuid }
+
+  schemas:
+    JobInput:
+      type: object
+      required: [title]
+      properties:
+        title:         { type: string }
+        department:    { type: string }
+        seniority:     { type: string, enum: [intern, junior, mid, senior, staff, principal] }
+        work_mode:     { type: string, enum: [remote, hybrid, onsite] }
+        location:      { type: string }
+        country:       { type: string, minLength: 2, maxLength: 2 }
+        comp_currency: { type: string }
+        comp_min:      { type: integer }
+        comp_max:      { type: integer }
+        comp_period:   { type: string, enum: [year, month, day, hour] }
+        scope:         { type: string }
+        must_haves:    { type: array, items: { type: string } }
+        nice_to_haves: { type: array, items: { type: string } }
+        disqualifiers: { type: array, items: { type: string } }
+        auto_source:   { type: boolean }
+        source_target: { type: integer, minimum: 1, maximum: 50 }
+
+    Job:
+      type: object
+      properties:
+        id:         { type: string, format: uuid }
+        title:      { type: string }
+        seniority:  { type: string }
+        work_mode:  { type: string }
+        location:   { type: string }
+        status:     { type: string }
+
+    Candidate:
+      type: object
+      properties:
+        id:               { type: string, format: uuid }
+        name:             { type: string }
+        title:            { type: string }
+        company:          { type: string }
+        email:            { type: string, description: 'Verified-only. Empty string if no verified email.' }
+        phone:            { type: string, description: 'Verified-only. Empty string if not publicly listed.' }
+        linkedin_url:     { type: string, format: uri }
+        company_website:  { type: string, format: uri }
+        candidate_type:   { type: string, enum: [B2B, B2C, B2B2C] }
+        lead_temperature: { type: string, enum: [Hot, Cold] }
+        confidence_score: { type: string, enum: [High, Medium, Low] }
+        reason_for_fit:   { type: string }
+        buying_signal:    { type: string }
+        stage:            { type: string }
+        verification_sources_count: { type: integer, minimum: 1 }
+
+  responses:
+    Job:
+      description: Single job
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/Job' }
+    JobList:
+      description: List of jobs
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items: { $ref: '#/components/schemas/Job' }
+    Candidate:
+      description: Single candidate
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: { $ref: '#/components/schemas/Candidate' }
+    CandidateList:
+      description: List of candidates
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items: { $ref: '#/components/schemas/Candidate' }
