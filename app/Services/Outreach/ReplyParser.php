@@ -72,14 +72,20 @@ class ReplyParser
 
     private function bestBody(array $payload): string
     {
-        // Mailgun's `stripped-text` removes the quoted prior message; it's the
-        // cleanest representation of the actual reply.
-        return trim((string) (
-            $payload['stripped-text']
+        // Cleanest sources first:
+        //  - Mailgun's `stripped-text` removes the quoted prior message
+        //  - Resend's `data.text` is the plain-text body of the received email
+        $body = $payload['stripped-text']
             ?? $payload['body-plain']
+            ?? $payload['data']['text']
+            ?? $payload['data']['html']
             ?? $payload['body-html']
-            ?? ''
-        ));
+            ?? '';
+
+        if (is_string($body) && str_contains($body, '<') && str_contains($body, '>')) {
+            $body = strip_tags($body);
+        }
+        return trim((string) $body);
     }
 
     /**

@@ -7,8 +7,7 @@ use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\JobController;
 use App\Http\Controllers\Web\OnboardingController;
 use App\Http\Controllers\Web\OutreachController;
-use App\Http\Controllers\Webhooks\MailgunInboundController;
-use App\Http\Controllers\Webhooks\MailgunWebhookController;
+use App\Http\Controllers\Webhooks\ResendInboundController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'marketing')->name('home');
@@ -61,13 +60,11 @@ Route::middleware(['auth', 'tenant.scope'])->group(function () {
     Route::post('/interviews/{publicId}/confirm',         [CalendarController::class, 'confirmSlot'])->name('interviews.confirm');
 });
 
-// Mailgun event notifications: signature-verified, no auth.
-Route::post('/webhooks/mailgun', [MailgunWebhookController::class, 'events'])
-    ->middleware('mailgun.signature')
-    ->name('webhooks.mailgun');
-
-// Mailgun inbound route (full reply payload). Note: Mailgun's inbound route
-// signs the same way as event webhooks; the same middleware applies.
-Route::post('/webhooks/mailgun-inbound', [MailgunInboundController::class, 'inbound'])
-    ->middleware('mailgun.signature')
-    ->name('webhooks.mailgun-inbound');
+// Resend webhook: one endpoint handles both lifecycle events
+// (email.delivered, opened, clicked, bounced...) and inbound replies
+// (email.received). Signature verified via Svix (svix-id / svix-timestamp /
+// svix-signature). Configure in Resend Dashboard → Webhooks pointing at
+// this URL with all events checked.
+Route::post('/webhooks/resend', [ResendInboundController::class, 'events'])
+    ->middleware('resend.signature')
+    ->name('webhooks.resend');

@@ -21,9 +21,9 @@ return [
         // AI providers
         'services.anthropic.api_key',
 
-        // Mailgun
-        'services.mailgun.secret',
-        'services.mailgun.webhook_signing_key',
+        // Resend (outbound + Svix-signed inbound webhooks)
+        'services.resend.key',
+        'services.resend.webhook_signing_secret',
 
         // Workforce handoff
         'services.workforce.api_key',

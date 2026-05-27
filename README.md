@@ -9,8 +9,8 @@ A multi-tenant, plug-into-anything autonomous recruiting agent powered by EIAAW.
 | Source candidates (verified URLs, no guessed emails) | `SourcingAgent` (Claude Opus 4.7) | `POST /api/v1/jobs/{id}/source` |
 | Screen against JD with row-level citations | `ScreeningAgent` | `POST /api/v1/candidates/{id}/screen` |
 | Draft brand-grounded outreach | `DraftingAgent` (Claude Haiku 4.5) | `POST /api/v1/candidates/{id}/draft` |
-| Approve & send (Mailgun) | Human → `MailgunOutreachSender` | `POST /api/v1/outreach/{id}/approve` |
-| Propose interview slots from candidate reply | `SchedulingAgent` | Triggered by Mailgun inbound webhook |
+| Approve & send (Resend) | Human → `ResendOutreachSender` | `POST /api/v1/outreach/{id}/approve` |
+| Propose interview slots from candidate reply | `SchedulingAgent` | Triggered by Resend `email.received` webhook |
 | Handoff to EIAAW Workforce onboarding | `WorkforceHandoff` | `POST /api/v1/handoff/workforce/{id}` |
 
 Every external system can integrate via REST + HMAC-signed outbound webhooks. See `docs/INTEGRATION.md` and `public/docs/openapi.yaml`.
@@ -91,7 +91,7 @@ railway up
 │        │                              │                            │            │
 └────────┼──────────────────────────────┼────────────────────────────┼────────────┘
          ▼                              ▼                            ▼
-   VerifyApiKey               EnforceTenantScope            VerifyMailgunSignature
+   VerifyApiKey               EnforceTenantScope            VerifyResendSignature (Svix)
          │                              │                            │
          └──────────────┬───────────────┘                            │
                         ▼                                            │
@@ -106,7 +106,7 @@ railway up
      (tenant-     ScreeningAgent          (status=approved)      events / replied state
       scoped)     DraftingAgent                  │                       │
                   SchedulingAgent                ▼                       │
-                  → AnthropicClient        MailgunOutreachSender         │
+                  → AnthropicClient        ResendOutreachSender          │
                   → LeadVerificationGate        │                        │
                                                 ▼                        ▼
                                           Outbound webhooks (HMAC-SHA256 signed)

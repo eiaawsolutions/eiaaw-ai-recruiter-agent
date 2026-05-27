@@ -2,7 +2,7 @@
 
 use App\Http\Middleware\EnforceTenantScope;
 use App\Http\Middleware\VerifyApiKey;
-use App\Http\Middleware\VerifyMailgunSignature;
+use App\Http\Middleware\VerifyResendSignature;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -28,7 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'api.key'           => VerifyApiKey::class,
             'tenant.scope'      => EnforceTenantScope::class,
-            'mailgun.signature' => VerifyMailgunSignature::class,
+            'resend.signature'  => VerifyResendSignature::class,
         ]);
 
         // Sanctum SPA: routes under api/v1/spa/* run with the full session

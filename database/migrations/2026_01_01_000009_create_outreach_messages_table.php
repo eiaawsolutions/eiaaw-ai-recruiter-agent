@@ -31,7 +31,7 @@ return new class extends Migration {
             $t->timestamp('sent_at')->nullable();
             $t->timestamp('replied_at')->nullable();
 
-            $t->string('provider')->default('mailgun');
+            $t->string('provider')->default('resend');
             $t->string('provider_message_id')->nullable()->index();
             $t->json('provider_events')->nullable();
 

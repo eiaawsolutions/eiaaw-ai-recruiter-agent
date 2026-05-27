@@ -30,7 +30,6 @@ class HandleInboundReplyJob implements ShouldQueue
         try {
             $payload = $event->payload ?? [];
 
-            // Match the outreach: by header, then by recipient tag.
             $outreach = $this->matchOutreach($payload);
             if (! $outreach) {
                 $event->update(['processing_error' => 'no_matching_outreach', 'processed_at' => now()]);
@@ -55,19 +54,17 @@ class HandleInboundReplyJob implements ShouldQueue
 
     private function matchOutreach(array $payload): ?OutreachMessage
     {
+        $h = $this->headersIndex($payload);
+
         // 1. X-EIAAW-Outreach-Id custom header (we set this on outbound)
-        $candidates = [
-            $payload['X-Eiaaw-Outreach-Id'] ?? null,
-            $payload['X-EIAAW-Outreach-Id'] ?? null,
-            $payload['x-eiaaw-outreach-id'] ?? null,
-        ];
-        foreach (array_filter($candidates) as $publicId) {
+        $publicId = $h['x-eiaaw-outreach-id'] ?? null;
+        if ($publicId) {
             $m = OutreachMessage::query()->withoutGlobalScopes()->where('public_id', $publicId)->first();
             if ($m) return $m;
         }
 
-        // 2. In-Reply-To header → provider_message_id (the Mailgun id we stored)
-        $inReplyTo = trim((string) ($payload['In-Reply-To'] ?? $payload['in-reply-to'] ?? ''), '<>');
+        // 2. In-Reply-To header → provider_message_id
+        $inReplyTo = trim((string) ($h['in-reply-to'] ?? ''), '<>');
         if ($inReplyTo !== '') {
             $m = OutreachMessage::query()->withoutGlobalScopes()
                 ->where('provider_message_id', $inReplyTo)
@@ -77,7 +74,7 @@ class HandleInboundReplyJob implements ShouldQueue
         }
 
         // 3. References header (chain of message IDs)
-        $references = (string) ($payload['References'] ?? $payload['references'] ?? '');
+        $references = (string) ($h['references'] ?? '');
         if ($references !== '') {
             preg_match_all('/<([^>]+)>/', $references, $m);
             foreach ($m[1] ?? [] as $id) {
@@ -90,7 +87,7 @@ class HandleInboundReplyJob implements ShouldQueue
         }
 
         // 4. Sender match — last resort, latest outreach to this address
-        $sender = strtolower(trim((string) ($payload['sender'] ?? $payload['from'] ?? '')));
+        $sender = strtolower(trim($this->senderAddress($payload)));
         if ($sender !== '') {
             return OutreachMessage::query()->withoutGlobalScopes()
                 ->where('to_address', $sender)
@@ -100,5 +97,47 @@ class HandleInboundReplyJob implements ShouldQueue
         }
 
         return null;
+    }
+
+    /**
+     * Normalize headers from either:
+     *  - Resend: payload.data.headers = [{name, value}, ...]
+     *  - Mailgun-style flat keys: payload['In-Reply-To'], etc.
+     * Returns lowercase-keyed associative array.
+     */
+    private function headersIndex(array $payload): array
+    {
+        $out = [];
+
+        // Resend shape
+        $headers = $payload['data']['headers'] ?? null;
+        if (is_array($headers)) {
+            foreach ($headers as $hdr) {
+                if (isset($hdr['name'], $hdr['value'])) {
+                    $out[strtolower((string) $hdr['name'])] = (string) $hdr['value'];
+                }
+            }
+        }
+
+        // Flat keys (Mailgun-style or test fixtures)
+        foreach ($payload as $k => $v) {
+            if (is_string($v)) {
+                $out[strtolower((string) $k)] = $v;
+            }
+        }
+
+        return $out;
+    }
+
+    private function senderAddress(array $payload): string
+    {
+        // Resend
+        $from = $payload['data']['from'] ?? null;
+        if (is_string($from)) {
+            if (preg_match('/<([^>]+)>/', $from, $m)) return $m[1];
+            return $from;
+        }
+        // Mailgun-style fallback
+        return (string) ($payload['sender'] ?? $payload['from'] ?? '');
     }
 }

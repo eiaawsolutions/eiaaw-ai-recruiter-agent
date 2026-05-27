@@ -3,7 +3,7 @@
 return [
     'default' => env('MAIL_MAILER', 'log'),
     'mailers' => [
-        'mailgun' => ['transport' => 'mailgun'],
+        'resend' => ['transport' => 'resend'],
         'smtp' => [
             'transport'  => 'smtp',
             'url'        => env('MAIL_URL'),

@@ -91,4 +91,11 @@ Send the `JobInput` schema (see `openapi.yaml`). If you want the recruiter to st
 - Fabricate emails or phone numbers.
 - Send outreach without a recorded approval row.
 - Cross-tenant data access (tenant scoping is baked into the global scope).
-- Track opens or clicks with pixels — outreach is sent with `o:tracking-opens=no` and `o:tracking-clicks=no`.
+- Inject open- or click-tracking pixels into outbound mail.
+
+## Email provider
+
+Outbound mail and inbound replies both run through [Resend](https://resend.com).
+
+- **Outbound**: `ResendOutreachSender` posts to `https://api.resend.com/emails`. Every send includes an `X-EIAAW-Outreach-Id` custom header so replies can be matched back even if the candidate's mail client mangles `In-Reply-To`.
+- **Inbound + lifecycle webhook**: configure a single Resend webhook pointing at `POST https://<your-host>/webhooks/resend` with these events checked: `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`, `email.complained`, `email.delivery_delayed`, **and** `email.received` (the inbound product). The endpoint verifies Svix signatures (`svix-id` / `svix-timestamp` / `svix-signature`) using the Resend signing secret resolved from `services.resend.webhook_signing_secret`.

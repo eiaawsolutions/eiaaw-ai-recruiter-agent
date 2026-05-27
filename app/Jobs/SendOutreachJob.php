@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\OutreachMessage;
-use App\Services\Outreach\MailgunOutreachSender;
+use App\Services\Outreach\ResendOutreachSender;
 use App\Services\Webhooks\WebhookDispatcher;
 use App\Support\TenantContext;
 use Illuminate\Bus\Queueable;
@@ -22,7 +22,7 @@ class SendOutreachJob implements ShouldQueue
 
     public function __construct(public int $tenantId, public int $outreachId) {}
 
-    public function handle(MailgunOutreachSender $sender, WebhookDispatcher $webhooks): void
+    public function handle(ResendOutreachSender $sender, WebhookDispatcher $webhooks): void
     {
         TenantContext::bindById($this->tenantId);
         try {

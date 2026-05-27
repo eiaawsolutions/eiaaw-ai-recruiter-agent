@@ -9,11 +9,16 @@ return [
         'timeout' => (int) env('ANTHROPIC_TIMEOUT', 120),
     ],
 
-    'mailgun' => [
-        'domain'              => env('MAILGUN_DOMAIN'),
-        'secret'              => env('MAILGUN_SECRET'),
-        'endpoint'            => env('MAILGUN_ENDPOINT', 'api.mailgun.net'),
-        'webhook_signing_key' => env('MAILGUN_WEBHOOK_SIGNING_KEY'),
+    'resend' => [
+        // Outbound API key. In the EIAAW shared Infisical project this lives
+        // as `RESEND_API` — RESEND_API_KEY is the fallback name used outside
+        // Infisical-resolved environments.
+        'key' => env('RESEND_API_KEY', env('RESEND_API')),
+
+        // Resend webhook signing secret (svix-style). Found in Resend
+        // Dashboard → Webhooks → your endpoint → Signing secret. Starts
+        // with `whsec_`.
+        'webhook_signing_secret' => env('RESEND_WEBHOOK_SIGNING_SECRET'),
     ],
 
     'workforce' => [

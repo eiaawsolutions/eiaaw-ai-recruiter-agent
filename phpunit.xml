@@ -32,9 +32,8 @@
         <env name="INFISICAL_RESOLVER_ENABLED" value="false"/>
         <env name="RECRUITER_REQUIRE_APPROVAL" value="true"/>
         <env name="ANTHROPIC_API_KEY" value="test-key"/>
-        <env name="MAILGUN_DOMAIN" value="test.example"/>
-        <env name="MAILGUN_SECRET" value="test-secret"/>
-        <env name="MAILGUN_WEBHOOK_SIGNING_KEY" value="test-webhook-key"/>
+        <env name="RESEND_API_KEY" value="test-resend-key"/>
+        <env name="RESEND_WEBHOOK_SIGNING_SECRET" value="whsec_dGVzdF9zZWNyZXRfMTIzNDU2Nzg5MA=="/>
         <env name="WORKFORCE_API_KEY" value="test-wf-key"/>
         <env name="WORKFORCE_HMAC_SECRET" value="test-wf-hmac"/>
     </php>
